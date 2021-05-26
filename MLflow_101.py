@@ -14,6 +14,7 @@
 from sklearn import datasets, linear_model, tree
 import pandas as pd
 iris = datasets.load_iris()
+
 print("Feature Data: \n", iris.data[::50], "\nTarget Classes: \n", iris.target[::50])
 
 # COMMAND ----------
@@ -48,6 +49,47 @@ mlflow.autolog() # Turn on "autologging"
 
 with mlflow.start_run(run_name="Sklearn Decision Tree"): #Pass in run_name using "with" Python syntax
   model_3 = tree.DecisionTreeClassifier(max_depth=5).fit(iris.data, iris.target) #Instantiate and fit model
+
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ### Model 3: Support Vector Classification - Parallelising with Hyperopt
+
+# COMMAND ----------
+
+from hyperopt import fmin, tpe, hp, SparkTrials, STATUS_OK
+from sklearn.svm import SVC
+from sklearn.model_selection import cross_val_score
+
+spark_trials = SparkTrials(4)
+
+#Define a function to minimize
+def objective(C):
+    # Create a support vector classifier model
+    clf = SVC(C)
+    
+    # Use the cross-validation accuracy to compare the models' performance
+    accuracy = cross_val_score(clf, iris.data, iris.target).mean()
+    
+    # Hyperopt tries to minimize the objective function. A higher accuracy value means a better model, so you must return the negative accuracy.
+    return {'loss': -accuracy, 'status': STATUS_OK}
+
+# Define the search space over hyperparameters
+search_space = hp.lognormal('C', 0, 1.0)
+# Select a search algorithm
+algo=tpe.suggest
+
+# Run the tuning algorithm with Hyperopt fmin()
+argmin = fmin(
+  fn=objective,
+  space=search_space,
+  algo=algo,
+  max_evals=16,
+  trials=spark_trials)
+
+# Print the best value found for C
+print("Best value found: ", argmin)
+
 
 # COMMAND ----------
 
